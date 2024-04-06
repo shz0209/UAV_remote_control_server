@@ -1,89 +1,130 @@
 #include <stdio.h>
-#include <netdb.h>
-#include <unistd.h>
-#include <netinet/in.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-// #include <opencv2/opencv.hpp>
+#include <arpa/inet.h>
+#include <pthread.h>
 
-#define MAX 10*1024
+#define MAX 1024
 #define PORT 6666
 
-// Driver function
+struct Sockinfo
+{
+    int fd;
+    pthread_t tid;
+    struct sockaddr_in addr;
+};
+
+struct Sockinfo sockinfo[128];
+
+
+void* working(void* arg)
+{
+    while(1)
+    {
+        struct Sockinfo* info = (struct Sockinfo*)arg;
+        char buf[MAX];
+        int ret = read(info->fd,buf,sizeof(buf));
+        if(ret==0)
+        {
+            printf("客户端已关闭连接...\n");
+            info->fd=-1;
+            break;
+        }
+        else if(ret==-1)
+        {
+            printf("接收数据失败...\n");
+            info->fd=-1;
+            break;
+        }
+        else
+        {
+            //do something
+        }
+
+        return NULL;
+
+    }
+}
+
+
 int main()
 {
-    char buff[MAX];
-    int n;
-    int sockfd, connfd, len;
-    struct sockaddr_in server, client;
-
-    // socket create and verification
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    //创建连接套接字
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd == -1) {
         printf("socket creation failed...\n");
         exit(0);
     }
 
     printf("socket successfully created..\n");
-    bzero(&server, sizeof(server));
 
+    struct sockaddr_in addr;
     // assign IP, PORT
-    server.sin_family = AF_INET;
-    server.sin_addr.s_addr = htonl(INADDR_ANY);
-    server.sin_port = htons(PORT);
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_port = htons(PORT);
 
     // binding newly created socket to given IP and verification
-    if ((bind(sockfd, (struct sockaddr*)&server, sizeof(server))) != 0) {
+    int ret = bind(sockfd,(struct sockaddr*)&addr,sizeof(addr));
+    if (ret != 0) {
         printf("socket bind failed...\n");
         exit(0);
     }
 
     printf("socket successfully binded..\n");
 
+
     // now server is ready to listen and verification
-    if ((listen(sockfd, 5)) != 0) {
+    int ret = listen(sockfd,100);
+    if (ret != 0) {
         printf("Listen failed...\n");
         exit(0);
     }
 
     printf("server listening...\n");
 
-    len = sizeof(client);
-
-    // accept the data packet from client and verification
-    connfd = accept(sockfd, (struct sockaddr*)&client, &len);
-    if (connfd < 0) {
-        printf("server acccept failed...\n");
-        exit(0);
+    int len = sizeof(struct sockaddr);
+    int max = sizeof(sockinfo)/sizeof(sockinfo[0]);
+    for(int i=0;i<max;i++)
+    {
+        bzero(&sockinfo[i],sizeof(sockinfo[i]));
+        sockinfo[i].fd=-1;
+        sockinfo[i].tid=-1;
     }
 
-    printf("server acccept the client...\n");
-
-    // infinite loop for chat
-    while(1) {
-        bzero(buff, MAX);
-
-        // read the messtruct sockaddrge from client and copy it in buffer
-        if (read(connfd, buff, sizeof(buff)) <= 0) {
-            printf("client close...\n");
-            close(connfd);
-            break;
+    while(1)
+    {
+        // 创建子线程
+        struct Sockinfo* pinfo;
+        for(int i=0; i<max; ++i)
+        {
+            if(sockinfo[i].fd == -1)
+            {
+                pinfo = &sockinfo[i];
+                break;
+            }
+            if(i == max-1)
+            {
+                sleep(1);
+                i--;
+            }
         }
 
-        // print buffer which contains the client contents
-        printf("from client: %s\n", buff);
-
-        // if msg contains "Exit" then server exit and chat ended.
-        if (strncmp("exit", buff, 4) == 0) {
-            printf("server exit...\n");
-            close(connfd);
-            break;
+        int connfd = accept(sockfd, (struct sockaddr*)&pinfo->addr, &len);
+        printf("parent thread, connfd: %d\n", connfd);
+        if(connfd == -1)
+        {
+            perror("accept");
+            exit(0);
         }
+        pinfo->fd = connfd;
+        pthread_create(&pinfo->tid, NULL, working, pinfo);
+        pthread_detach(pinfo->tid);
     }
 
-    // After chatting close the socket
-    close(sockfd);
-    exit(0);
+    // 释放资源
+    close(sockfd);  // 监听
+    return 0;
+
 }
