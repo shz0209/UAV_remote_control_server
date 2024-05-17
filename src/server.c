@@ -5,7 +5,7 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 
-#define MAX 1024
+#define MAX 1
 #define PORT 6666
 
 struct Sockinfo
@@ -24,6 +24,7 @@ void* working(void* arg)
     {
         struct Sockinfo* info = (struct Sockinfo*)arg;
         char buf[MAX];
+        //通过文件描述符读取对应内存空间中的通信数据到buf中
         int ret = read(info->fd,buf,sizeof(buf));
         if(ret==0)
         {
@@ -39,18 +40,19 @@ void* working(void* arg)
         }
         else
         {
+            //打印buf的内容
+            printf("%s\n",buf);
             //do something
         }
-
-        return NULL;
-
     }
+    return NULL;
+
 }
 
 
 int main()
 {
-    //创建连接套接字
+    //创建监听套接字
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd == -1) {
         printf("socket creation failed...\n");
@@ -76,7 +78,7 @@ int main()
 
 
     // now server is ready to listen and verification
-    int ret = listen(sockfd,100);
+    ret = listen(sockfd,100);
     if (ret != 0) {
         printf("Listen failed...\n");
         exit(0);
@@ -84,7 +86,7 @@ int main()
 
     printf("server listening...\n");
 
-    int len = sizeof(struct sockaddr);
+    socklen_t len = sizeof(struct sockaddr);
     int max = sizeof(sockinfo)/sizeof(sockinfo[0]);
     for(int i=0;i<max;i++)
     {
@@ -95,7 +97,7 @@ int main()
 
     while(1)
     {
-        // 创建子线程
+        // 遍历存储参数的数组，当fd为-1时，说明此文件描述符未被使用
         struct Sockinfo* pinfo;
         for(int i=0; i<max; ++i)
         {
@@ -110,7 +112,8 @@ int main()
                 i--;
             }
         }
-
+        //被动监听客户端的握手请求，三次握手成功则返回一个通信文件描述符，并将客户端的ip地址存进addr
+        //当无客户端进行握手请求时，代码会阻塞在accept，直到下一个客户端连接
         int connfd = accept(sockfd, (struct sockaddr*)&pinfo->addr, &len);
         printf("parent thread, connfd: %d\n", connfd);
         if(connfd == -1)
@@ -119,7 +122,9 @@ int main()
             exit(0);
         }
         pinfo->fd = connfd;
+        //创建子线程，pinfo作为参数传入working函数，会将创建的新线程的线程id赋给pinfo的tid
         pthread_create(&pinfo->tid, NULL, working, pinfo);
+        //将线程设置为分离模式，当线程结束后系统会自动回收线程资源
         pthread_detach(pinfo->tid);
     }
 

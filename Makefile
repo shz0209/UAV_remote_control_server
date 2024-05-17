@@ -1,3 +1,4 @@
+# CC:=arm-linux-gnueabihf-g++
 CC:=g++
 SRC_DIR=./src
 OBJ_DIR=./obj
@@ -18,24 +19,8 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 $(TAR):$(OBJ_FILES)
 	$(CC) $^ -o $@ $(LDFLAGS)
 
-# $(TAR_SERVER):$(OBJ_FILES)
-# 	$(CC) $^ -o $@
+clean:
+	rm -rf $(OBJ_DIR)/*.o $(TAR)
 
-# clean:
-#     rm -rf $(OBJ_DIR)
-# all:client,server
 
-# .PHONY:all
-# client:client.o
-# 	gcc -o client client.o
-# client.o:./src/client.c
-# 	gcc -c ./src/client.c -o client.o 
-
-# server:server.o
-# 	gcc -o server server.o
-# server.o:./src/server.c
-# 	gcc -c ./src/server.c -o server.o
-
-# clean:
-# 	rm -f *.o
 

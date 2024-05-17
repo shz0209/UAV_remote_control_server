@@ -1,1 +1,0 @@
-void get_video();
